@@ -1,0 +1,16 @@
+{
+  "name": "p0chita",
+  "version": "1.0.0",
+  "description": "Tarea Grupal para  SIS COLAB\r Integrantes: YO Carlos Randal PAdilla Luizaga\r y solo yo  de momento :V\r eddy me la pela",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1"
+  }
+}

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="description" content="FROND — Frontend project starter" />
+    <title>CHAT COLABORATIVO</title>
+
+    <link rel="estilo"href="styles.css" />
+
+</head>
+<body>
+    <div class="chat-container">
+        <header>
+            <h1>Sala de Chat P0chita</h1>
+            <div id="status">conectado</div>
+        </header>
+        <ul id="messages">
+            <li class="message">Bienvenido al chat colaborativo!</li>
+            <form id="form" action="">
+                <input id="input" autocomplete="off" placeholder="Escribe tu mensaje aquí..." /><button>Enviar</button>
+            </form>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="cliente.js"></script>
+</body>
+</html>
