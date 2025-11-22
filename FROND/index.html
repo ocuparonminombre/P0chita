@@ -1,28 +1,130 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="description" content="FROND — Frontend project starter" />
-    <title>CHAT COLABORATIVO</title>
-
-    <link rel="estilo"href="styles.css" />
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Corporativo Seguro</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Estilos simples para ocultar/mostrar secciones */
+        #chat-section { display: none; }
+        #login-section { text-align: center; margin-top: 50px; }
+        .user-avatar { width: 30px; height: 30px; border-radius: 50%; vertical-align: middle; margin-right: 10px;}
+    </style>
 </head>
 <body>
-    <div class="chat-container">
-        <header>
-            <h1>Sala de Chat P0chita</h1>
-            <div id="status">conectado</div>
-        </header>
-        <ul id="messages">
-            <li class="message">Bienvenido al chat colaborativo!</li>
-            <form id="form" action="">
-                <input id="input" autocomplete="off" placeholder="Escribe tu mensaje aquí..." /><button>Enviar</button>
-            </form>
+
+    <div id="login-section">
+        <h2>Bienvenido al Chat Corporativo</h2>
+        <p>Por favor, identifícate para continuar.</p>
+        <button id="btn-login">Iniciar Sesión con Google</button>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="cliente.js"></script>
+    <div id="chat-section" class="chat-container">
+        <header>
+            <h1>Sala General</h1>
+            <div id="user-info"></div> <button id="btn-logout" style="font-size: 0.8rem;">Salir</button>
+        </header>
+        
+        <ul id="messages"></ul>
+
+        <form id="form" action="">
+            <input id="input" autocomplete="off" placeholder="Escribe un mensaje..." />
+            <button>Enviar</button>
+        </form>
+    </div>
+
+    <script type="module">
+        // Importar funciones necesarias de Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+        import { io } from "https://cdn.socket.io/4.5.4/socket.io.esm.min.js";
+
+        // --- PEGA AQUÍ TU CONFIGURACIÓN DE FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "TU_API_KEY_AQUI",
+            authDomain: "TU_PROYECTO.firebaseapp.com",
+            projectId: "TU_PROYECTO_ID",
+            // ... resto de configuración
+        };
+
+        // Inicializar IAM
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+
+        let socket;
+
+        // Referencias DOM
+        const loginSection = document.getElementById('login-section');
+        const chatSection = document.getElementById('chat-section');
+        const userInfo = document.getElementById('user-info');
+
+        // 1. Manejo del botón de Login
+        document.getElementById('btn-login').addEventListener('click', async () => {
+            try {
+                const result = await signInWithPopup(auth, provider);
+                const user = result.user;
+                // ¡IMPORTANTE! Obtener el Token JWT para enviarlo al servidor
+                const token = await user.getIdToken();
+                connectSocket(token, user);
+            } catch (error) {
+                console.error("Error login:", error);
+            }
+        });
+
+        // 2. Función para conectar al Websocket tras login exitoso
+        function connectSocket(token, user) {
+            // Conectamos enviando el token en 'auth'
+            socket = io({
+                auth: { token: token } 
+            });
+
+            socket.on('connect_error', (err) => {
+                alert("Error de conexión: " + err.message); // Si el servidor rechaza el token
+            });
+
+            socket.on('connect', () => {
+                // Cambiar interfaz
+                loginSection.style.display = 'none';
+                chatSection.style.display = 'block';
+                userInfo.innerHTML = `<img src="${user.photoURL}" class="user-avatar"> ${user.displayName}`;
+                setupChatListeners();
+            });
+        }
+
+        // 3. Lógica del Chat (Igual que antes)
+        function setupChatListeners() {
+            const form = document.getElementById('form');
+            const input = document.getElementById('input');
+            const messages = document.getElementById('messages');
+
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (input.value) {
+                    socket.emit('chat_message', input.value);
+                    input.value = '';
+                }
+            });
+
+            socket.on('chat_message', (data) => {
+                const item = document.createElement('li');
+                // Ahora mostramos la foto real del usuario
+                item.innerHTML = `
+                    <img src="${data.avatar}" class="user-avatar" style="width:20px;height:20px;">
+                    <strong>${data.user}</strong> <small>[${data.time}]</small>: ${data.text}
+                `;
+                messages.appendChild(item);
+                window.scrollTo(0, document.body.scrollHeight);
+            });
+            
+            // Logout
+            document.getElementById('btn-logout').addEventListener('click', () => {
+                signOut(auth);
+                socket.disconnect();
+                location.reload();
+            });
+        }
+    </script>
 </body>
 </html>
