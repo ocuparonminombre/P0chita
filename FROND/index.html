@@ -130,7 +130,13 @@
                     <strong>${data.user}</strong> <small>[${data.time}]</small>: ${data.text}
                 `;
                 messages.appendChild(item);
-                messages.scrollTop = messages.scrollHeight;
+                // Scroll suave al final
+                setTimeout(() => {
+                    messages.scrollTo({
+                        top: messages.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                }, 10);
             });
 
             // Escuchar eventos de conexión/desconexión de usuarios
@@ -139,7 +145,12 @@
                 item.className = 'system-message';
                 item.textContent = data.text;
                 messages.appendChild(item);
-                messages.scrollTop = messages.scrollHeight;
+                setTimeout(() => {
+                    messages.scrollTo({
+                        top: messages.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                }, 10);
             });
 
             socket.on('user disconnected', (data) => {
@@ -147,7 +158,12 @@
                 item.className = 'system-message';
                 item.textContent = data.text;
                 messages.appendChild(item);
-                messages.scrollTop = messages.scrollHeight;
+                setTimeout(() => {
+                    messages.scrollTo({
+                        top: messages.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                }, 10);
             });
             
             // Logout
