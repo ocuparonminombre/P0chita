@@ -6,10 +6,8 @@
     <title>Chat Corporativo Seguro</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        /* Estilos simples para ocultar/mostrar secciones */
+        /* Estilos para ocultar/mostrar secciones */
         #chat-section { display: none; }
-        #login-section { text-align: center; margin-top: 50px; }
-        .user-avatar { width: 30px; height: 30px; border-radius: 50%; vertical-align: middle; margin-right: 10px;}
     </style>
 </head>
 <body>
@@ -40,15 +38,18 @@
         import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
         import { io } from "https://cdn.socket.io/4.5.4/socket.io.esm.min.js";
 
-        // --- PEGA AQUÍ TU CONFIGURACIÓN DE FIREBASE ---
+        // --- CONFIGURACIÓN DE FIREBASE ---
         const firebaseConfig = {
-            apiKey: "TU_API_KEY_AQUI",
-            authDomain: "TU_PROYECTO.firebaseapp.com",
-            projectId: "TU_PROYECTO_ID",
-            // ... resto de configuración
+            apiKey: "AIzaSyAbNqiXHeP8rPZq8N0oyNgrR-HkaZom79M",
+            authDomain: "syscolabora.firebaseapp.com",
+            projectId: "syscolabora",
+            storageBucket: "syscolabora.firebasestorage.app",
+            messagingSenderId: "101549777166",
+            appId: "1:101549777166:web:db003d746e6995b3de775f",
+            measurementId: "G-ZSSRT2GN13"
         };
 
-        // Inicializar IAM
+        // Inicializar Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
@@ -63,33 +64,47 @@
         // 1. Manejo del botón de Login
         document.getElementById('btn-login').addEventListener('click', async () => {
             try {
+                console.log('Iniciando login con Google...');
                 const result = await signInWithPopup(auth, provider);
                 const user = result.user;
+                console.log('Login exitoso:', user.displayName);
+                
                 // ¡IMPORTANTE! Obtener el Token JWT para enviarlo al servidor
                 const token = await user.getIdToken();
+                console.log('Token obtenido, conectando al servidor...');
                 connectSocket(token, user);
             } catch (error) {
                 console.error("Error login:", error);
+                alert("Error al iniciar sesión: " + error.message);
             }
         });
 
         // 2. Función para conectar al Websocket tras login exitoso
         function connectSocket(token, user) {
+            console.log('Intentando conectar con token:', token ? 'Token presente' : 'Sin token');
+            
             // Conectamos enviando el token en 'auth'
-            socket = io({
-                auth: { token: token } 
+            socket = io('http://localhost:3000', {
+                auth: { token: token },
+                transports: ['websocket', 'polling']
             });
 
             socket.on('connect_error', (err) => {
-                alert("Error de conexión: " + err.message); // Si el servidor rechaza el token
+                console.error('Error de conexión:', err);
+                alert("Error de conexión: " + err.message + "\n\nVerifica que el servidor esté corriendo en http://localhost:3000");
             });
 
             socket.on('connect', () => {
+                console.log('¡Conectado al servidor exitosamente!');
                 // Cambiar interfaz
                 loginSection.style.display = 'none';
                 chatSection.style.display = 'block';
                 userInfo.innerHTML = `<img src="${user.photoURL}" class="user-avatar"> ${user.displayName}`;
                 setupChatListeners();
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Desconectado del servidor');
             });
         }
 
@@ -109,13 +124,30 @@
 
             socket.on('chat_message', (data) => {
                 const item = document.createElement('li');
-                // Ahora mostramos la foto real del usuario
+                item.className = 'message';
                 item.innerHTML = `
-                    <img src="${data.avatar}" class="user-avatar" style="width:20px;height:20px;">
+                    <img src="${data.avatar || 'https://via.placeholder.com/30'}" class="user-avatar" style="width:20px;height:20px;">
                     <strong>${data.user}</strong> <small>[${data.time}]</small>: ${data.text}
                 `;
                 messages.appendChild(item);
-                window.scrollTo(0, document.body.scrollHeight);
+                messages.scrollTop = messages.scrollHeight;
+            });
+
+            // Escuchar eventos de conexión/desconexión de usuarios
+            socket.on('user connected', (data) => {
+                const item = document.createElement('li');
+                item.className = 'system-message';
+                item.textContent = data.text;
+                messages.appendChild(item);
+                messages.scrollTop = messages.scrollHeight;
+            });
+
+            socket.on('user disconnected', (data) => {
+                const item = document.createElement('li');
+                item.className = 'system-message';
+                item.textContent = data.text;
+                messages.appendChild(item);
+                messages.scrollTop = messages.scrollHeight;
             });
             
             // Logout

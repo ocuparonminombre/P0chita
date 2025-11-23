@@ -1,0 +1,21 @@
+# Credenciales de Firebase - NUNCA subir a repositorios públicos
+serviceaccount.json
+*.json
+!package.json
+!package-lock.json
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Variables de entorno
+.env
+.env.local
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+

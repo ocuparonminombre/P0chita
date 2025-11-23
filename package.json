@@ -11,6 +11,16 @@
   "license": "ISC",
   "dependencies": {
     "express": "^5.1.0",
+    "firebase": "^12.6.0",
+    "firebase-admin": "^12.0.0",
     "socket.io": "^4.8.1"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ocuparonminombre/P0chita.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ocuparonminombre/P0chita/issues"
+  },
+  "homepage": "https://github.com/ocuparonminombre/P0chita#readme"
 }
