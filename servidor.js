@@ -3,9 +3,29 @@ const app = express();
 const http = require('http');
 const { Server } = require("socket.io");
 const admin = require('firebase-admin');
+const sqlite3 = require('sqlite3').verbose(); // Importar SQLite
 
 // Crear servidor HTTP
 const server = http.createServer(app);
+
+// --- 1. CONFIGURACIÓN BASE DE DATOS (NUEVO) ---
+const db = new sqlite3.Database('./chat.db', (err) => {
+    if (err) console.error('❌ Error al conectar con la base de datos', err);
+    else console.log('✅ Base de datos SQLite conectada');
+});
+
+// Crear tabla si no existe
+db.serialize(() => {
+    db.run(`
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user TEXT,
+            avatar TEXT,
+            text TEXT,
+            time TEXT
+        )
+    `);
+});
 
 // Inicializar Socket.IO con configuración CORS
 const io = new Server(server, {
@@ -37,21 +57,17 @@ app.use(express.static('FROND'));
 // Middleware de autenticación
 io.use(async (socket, next) => {
     console.log('🔐 Nueva conexión intentando autenticarse...');
-    console.log('📦 Auth data recibida:', socket.handshake.auth);
     
     if (!firebaseInitialized) {
-        console.error('❌ Firebase no está inicializado');
         return next(new Error("Firebase no está configurado"));
     }
     
     const token = socket.handshake.auth.token;
     if (!token) {
-        console.error('❌ No se recibió token de autenticación');
         return next(new Error("autenticacion requerida"));
     }
     
     try {
-        console.log('🔍 Verificando token de Firebase...');
         const decodedToken = await admin.auth().verifyIdToken(token);
         socket.user = {
             uid: decodedToken.uid,
@@ -59,21 +75,37 @@ io.use(async (socket, next) => {
             picture: decodedToken.picture || '',
             email: decodedToken.email
         };
-        console.log('✅ Token verificado correctamente para:', socket.user.name);
+        console.log('✅ Token verificado para:', socket.user.name);
         next();
     } catch (error) {
-        console.error("❌ Error de autenticacion:", error.message);
-        console.error("Detalles del error:", error);
-        next(new Error("autenticacion requerida: " + error.message));
+        console.error("❌ Error auth:", error.message);
+        next(new Error("autenticacion fallo"));
     }
 });
 
 // Manejo de conexiones WebSocket
 io.on('connection', (socket) => {
     const currentUser = socket.user;
-    console.log(`👤 Usuario verificado: ${currentUser.name} entró al chat`);
+    console.log(`👤 Usuario conectado: ${currentUser.name}`);
 
-    // Notificar que un usuario se conectó
+    // --- 2. RECUPERAR HISTORIAL (NUEVO) ---
+    // Consultar la BD y enviar mensajes anteriores SOLO al usuario que entra
+    db.all("SELECT * FROM messages ORDER BY id ASC", [], (err, rows) => {
+        if (err) {
+            console.error("Error leyendo historial:", err);
+            return;
+        }
+        rows.forEach((row) => {
+            socket.emit('chat_message', {
+                user: row.user,
+                avatar: row.avatar,
+                text: row.text,
+                time: row.time
+            });
+        });
+    });
+
+    // Notificar que un usuario se conectó (A todos)
     io.emit('user connected', {
         text: `${currentUser.name} se ha unido al chat`,
         type: 'conectado'
@@ -82,12 +114,25 @@ io.on('connection', (socket) => {
     // Escuchar mensajes del chat
     socket.on('chat_message', (msg) => {
         const now = new Date();
-        io.emit('chat_message', {
+        const timeString = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        
+        // Datos del mensaje
+        const messageData = {
             user: currentUser.name,
             avatar: currentUser.picture,
             text: msg,
-            time: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+            time: timeString
+        };
+
+        // --- 3. GUARDAR EN BASE DE DATOS (NUEVO) ---
+        const stmt = db.prepare("INSERT INTO messages (user, avatar, text, time) VALUES (?, ?, ?, ?)");
+        stmt.run(messageData.user, messageData.avatar, messageData.text, messageData.time, (err) => {
+            if (err) console.error("Error guardando mensaje:", err);
         });
+        stmt.finalize();
+
+        // Enviar a todos los clientes (Broadcast)
+        io.emit('chat_message', messageData);
     });
 
     // Manejar desconexión
@@ -96,13 +141,12 @@ io.on('connection', (socket) => {
             text: `${currentUser.name} ha salido del chat`,
             type: 'desconectado'
         });
-        console.log(`👋 Usuario: ${currentUser.name} salió del chat`);
+        console.log(`👋 Usuario salió: ${currentUser.name}`);
     });
 });
 
 // Iniciar servidor
 server.listen(3000, () => {
     console.log('🚀 Servidor corriendo en http://localhost:3000');
-    console.log('📁 Archivos estáticos servidos desde: ./FROND');
+    console.log('📁 Carpeta pública: ./FROND');
 });
-
