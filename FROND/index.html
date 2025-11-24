@@ -41,12 +41,14 @@
     </div>
 
     <script type="module">
-        // Importar funciones necesarias de Firebase
+        // 1. Importaciones
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-        import { io } from "https://cdn.socket.io/4.5.4/socket.io.esm.min.js";
+        
+        // IMPORTAMOS NUESTRO NUEVO ARCHIVO DE SOCKETS
+        import { conectarSocket, enviarMensaje, desconectarSocket, borrarHistorial } from './socket-service.js';
 
-        // --- CONFIGURACIÓN DE FIREBASE ---
+        // 2. Configuración Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyAbNqiXHeP8rPZq8N0oyNgrR-HkaZom79M",
             authDomain: "syscolabora.firebaseapp.com",
@@ -57,160 +59,119 @@
             measurementId: "G-ZSSRT2GN13"
         };
 
-        // Inicializar Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
-
-        let socket;
 
         // Referencias DOM
         const loginSection = document.getElementById('login-section');
         const chatSection = document.getElementById('chat-section');
         const userInfo = document.getElementById('user-info');
+        const messages = document.getElementById('messages');
+        const input = document.getElementById('input');
 
-        // 1. Botón de Login
+        // 3. Manejo del Login
         document.getElementById('btn-login').addEventListener('click', async () => {
             try {
-                console.log('Iniciando login con Google...');
                 const result = await signInWithPopup(auth, provider);
                 const user = result.user;
-                console.log('Login exitoso:', user.displayName);
-                
-                // Obtener Token JWT
                 const token = await user.getIdToken();
-                console.log('Token obtenido, conectando al servidor...');
-                connectSocket(token, user);
+                
+                iniciarChat(token, user); // Función auxiliar abajo
             } catch (error) {
                 console.error("Error login:", error);
-                alert("Error al iniciar sesión: " + error.message);
+                alert("Error: " + error.message);
             }
         });
 
-        // 2. Función para conectar al Websocket
-        function connectSocket(token, user) {
-            console.log('Intentando conectar con token:', token ? 'Token presente' : 'Sin token');
-            
-            // Conectamos
-            socket = io('http://localhost:3000', {
-                auth: { token: token },
-                transports: ['websocket', 'polling']
-            });
-            
-            socket.on('connect_error', (err) => {
-                console.error('Error de conexión:', err);
-                alert("Error de conexión: " + err.message + "\n\nVerifica que el servidor esté corriendo en http://localhost:3000");
-            });
-             
-            // --- AQUÍ ELIMINÉ LOS LISTENERS DUPLICADOS --- 
-            // (Ya no están 'user connected' ni 'user disconnected' aquí)
-
-            socket.on('connect', () => {
-                console.log('¡Conectado al servidor exitosamente!');
-                // Cambiar interfaz
-                loginSection.style.display = 'none';
-                chatSection.style.display = 'block';
-                userInfo.innerHTML = `<img src="${user.photoURL}" class="user-avatar"> ${user.displayName}`;
+        // 4. Función que conecta todo
+        function iniciarChat(token, user) {
+            // Llamamos a nuestro archivo separado pasándole "Callbacks" (Instrucciones de qué hacer con los datos)
+            conectarSocket(token, {
                 
-                // Iniciamos los listeners del chat UNA SOLA VEZ
-                setupChatListeners();
-            });
+                onConnect: () => {
+                    console.log("Conectado!");
+                    loginSection.style.display = 'none';
+                    chatSection.style.display = 'block';
+                    userInfo.innerHTML = `<img src="${user.photoURL}" class="user-avatar"> ${user.displayName}`;
+                },
 
-            socket.on('disconnect', () => {
-                console.log('Desconectado del servidor');
+                onDisconnect: () => {
+                    console.log("Desconectado");
+                },
+
+                onMessageReceived: (data) => {
+                    agregarMensajeDOM(data); // Usamos función visual
+                },
+
+                onSystemMessage: (data, color) => {
+                    agregarSistemaDOM(data.text, color);
+                },
+                
+                onHistoryCleared: (data) => {
+                    messages.innerHTML = '';
+                    agregarSistemaDOM(data.text, 'red');
+                }
             });
         }
 
-        // 3. Lógica del Chat
-        function setupChatListeners() {
-            const form = document.getElementById('form');
-            const input = document.getElementById('input');
-            const messages = document.getElementById('messages');
-
-            // Limpiar listeners anteriores para evitar dobles mensajes si se reconecta
-            socket.off('chat_message');
-            socket.off('user connected');
-            socket.off('user disconnected');
-
-            // Enviar mensaje
-            form.addEventListener('submit', (e) => {
-                e.preventDefault();
-                if (input.value) {
-                    socket.emit('chat_message', input.value);
-                    input.value = '';
-                }
-            });
-
-            // Recibir mensaje de chat
-            socket.on('chat_message', (data) => {
-                const item = document.createElement('li');
-                item.className = 'message';
-                item.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <img src="${data.avatar || 'https://via.placeholder.com/30'}" class="user-avatar" style="width:20px;height:20px;border-radius:50%;">
-                        <div>
-                            <strong>${data.user}</strong> <small>[${data.time}]</small>: 
-                            <span>${data.text}</span>
-                        </div>
-                    </div>
-                `;
-                messages.appendChild(item);
-                scrollToBottom();
-            });
-
-            // USUARIO CONECTADO (Solo este bloque controla el mensaje verde)
-            socket.on('user connected', (data) => {
-                const item = document.createElement('li');
-                item.textContent = data.text;
-                
-                // Estilos directos
-                item.style.color = 'green';
-                item.style.fontStyle = 'italic';
-                item.style.textAlign = 'center';
-                item.style.listStyle = 'none';
-                item.style.margin = '5px 0';
-
-                messages.appendChild(item);
-                scrollToBottom();
-            });
-
-            // USUARIO DESCONECTADO (Solo este bloque controla el mensaje rojo)
-            socket.on('user disconnected', (data) => {
-                const item = document.createElement('li');
-                item.textContent = data.text;
-                
-                // Estilos directos
-                item.style.color = 'red';
-                item.style.fontStyle = 'italic';
-                item.style.textAlign = 'center';
-                item.style.listStyle = 'none';
-                item.style.margin = '5px 0';
-
-                messages.appendChild(item);
-                scrollToBottom();
-            });
-            
-            // Función auxiliar para bajar el scroll
-            function scrollToBottom() {
-                setTimeout(() => {
-                    messages.scrollTo({
-                        top: messages.scrollHeight,
-                        behavior: 'smooth'
-                    });
-                }, 10);
+        // 5. Eventos de botones del Chat
+        document.getElementById('form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (input.value) {
+                enviarMensaje(input.value); // Usamos la función importada
+                input.value = '';
             }
+        });
 
-            // Logout
-            // Clonamos el botón para eliminar eventos anteriores y evitar multiples clicks
-            const oldBtn = document.getElementById('btn-logout');
-            const newBtn = oldBtn.cloneNode(true);
-            oldBtn.parentNode.replaceChild(newBtn, oldBtn);
-
-            newBtn.addEventListener('click', () => {
-                signOut(auth);
-                socket.disconnect();
-                location.reload();
+        document.getElementById('btn-logout').addEventListener('click', () => {
+            signOut(auth);
+            desconectarSocket(); // Usamos la función importada
+            location.reload();
+        });
+        
+        // Si tienes el botón de borrar
+        const btnClear = document.getElementById('btn-clear');
+        if(btnClear) {
+            btnClear.addEventListener('click', () => {
+               if(confirm("¿Borrar todo?")) borrarHistorial();
             });
+        }
+
+        // --- FUNCIONES VISUALES (Solo tocan el HTML) ---
+        
+        function agregarMensajeDOM(data) {
+            const item = document.createElement('li');
+            item.className = 'message';
+            item.innerHTML = `
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <img src="${data.avatar || 'https://via.placeholder.com/30'}" class="user-avatar" style="width:20px;height:20px;border-radius:50%;">
+                    <div>
+                        <strong>${data.user}</strong> <small>[${data.time}]</small>: 
+                        <span>${data.text}</span>
+                    </div>
+                </div>
+            `;
+            messages.appendChild(item);
+            bajarScroll();
+        }
+
+        function agregarSistemaDOM(texto, color) {
+            const item = document.createElement('li');
+            item.textContent = texto;
+            item.style.color = color;
+            item.style.fontStyle = 'italic';
+            item.style.textAlign = 'center';
+            item.style.listStyle = 'none';
+            item.style.margin = '5px 0';
+            messages.appendChild(item);
+            bajarScroll();
+        }
+
+        function bajarScroll() {
+            setTimeout(() => {
+                messages.scrollTo({ top: messages.scrollHeight, behavior: 'smooth' });
+            }, 10);
         }
     </script>
 </body>
