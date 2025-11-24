@@ -5,16 +5,15 @@ const { Server } = require("socket.io");
 const admin = require('firebase-admin');
 const sqlite3 = require('sqlite3').verbose(); // Importar SQLite
 
-// Crear servidor HTTP
-const server = http.createServer(app);
+const server = http.createServer(app);// Crear servidor HTTP
 
-// --- 1. CONFIGURACIÓN BASE DE DATOS (NUEVO) ---
+/*base de datos qlite3 pa no instalar nada :v*/
 const db = new sqlite3.Database('./chat.db', (err) => {
-    if (err) console.error('❌ Error al conectar con la base de datos', err);
-    else console.log('✅ Base de datos SQLite conectada');
+    if (err) console.error('error db', err);
+    else console.log(' base de datos SQLite conectada');
 });
 
-// Crear tabla si no existe
+// crea la tabla de mensajes si no existe
 db.serialize(() => {
     db.run(`
         CREATE TABLE IF NOT EXISTS messages (
@@ -29,12 +28,12 @@ db.serialize(() => {
 
 // Inicializar Socket.IO con configuración CORS
 const io = new Server(server, {
-    cors: {
+    cors: {/*configuramos cors para desarrollo*/
         origin: "*", // Permitir todas las conexiones para desarrollo
-        methods: ["GET", "POST"],
-        credentials: true
+        methods: ["GET", "POST"],/*permitimos conexiones GET y POST*/
+        credentials: true/*permitimos credenciales*/
     },
-    allowEIO3: true
+    allowEIO3: true/*permitimos compatibilidad con Engine.IO v3 */
 });
 
 // Inicializar Firebase Admin (solo si existe serviceaccount.json)
@@ -45,9 +44,9 @@ try {
         credential: admin.credential.cert(serviceaccount)
     });
     firebaseInitialized = true;
-    console.log('✅ Firebase Admin inicializado correctamente');
+    console.log('firebase Admin inicializado correctamente');
 } catch (error) {
-    console.warn('⚠️ Advertencia: No se encontró serviceaccount.json. La autenticación no funcionará.');
+    console.warn(' Advertencia: No se encontró serviceaccount.json. La autenticación no funcionará.');
     console.warn('Para usar autenticación, crea el archivo serviceaccount.json con tus credenciales de Firebase.');
 }
 
@@ -56,7 +55,7 @@ app.use(express.static('FROND'));
 
 // Middleware de autenticación
 io.use(async (socket, next) => {
-    console.log('🔐 Nueva conexión intentando autenticarse...');
+    console.log(' Nueva conexión intentando autenticarse...');
     
     if (!firebaseInitialized) {
         return next(new Error("Firebase no está configurado"));
@@ -75,10 +74,10 @@ io.use(async (socket, next) => {
             picture: decodedToken.picture || '',
             email: decodedToken.email
         };
-        console.log('✅ Token verificado para:', socket.user.name);
+        console.log(' Token verificado para:', socket.user.name);
         next();
     } catch (error) {
-        console.error("❌ Error auth:", error.message);
+        console.error(" Error auth:", error.message);
         next(new Error("autenticacion fallo"));
     }
 });
@@ -86,7 +85,7 @@ io.use(async (socket, next) => {
 // Manejo de conexiones WebSocket
 io.on('connection', (socket) => {
     const currentUser = socket.user;
-    console.log(`👤 Usuario conectado: ${currentUser.name}`);
+    console.log(` Usuario conectado: ${currentUser.name}`);
 
     // --- 2. RECUPERAR HISTORIAL (NUEVO) ---
     // Consultar la BD y enviar mensajes anteriores SOLO al usuario que entra
@@ -141,12 +140,12 @@ io.on('connection', (socket) => {
             text: `${currentUser.name} ha salido del chat`,
             type: 'desconectado'
         });
-        console.log(`👋 Usuario salió: ${currentUser.name}`);
+        console.log(` Usuario salió: ${currentUser.name}`);
     });
 });
 
 // Iniciar servidor
 server.listen(3000, () => {
-    console.log('🚀 Servidor corriendo en http://localhost:3000');
-    console.log('📁 Carpeta pública: ./FROND');
+    console.log(' Servidor corriendo en http://localhost:3000');
+    console.log(' Carpeta pública: ./FROND');
 });
